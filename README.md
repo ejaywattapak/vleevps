@@ -2,33 +2,75 @@
 
 VLEEE AI VPS Agent is a root-level terminal AI agent for Linux VPS administration.
 
-It uses the VLEEE API with **GPT-5.6 Luna** and can inspect, diagnose, modify, test and repair VPS scripts directly through the terminal.
+It uses the VLEEE API and **GPT-5.6 Luna** to inspect, diagnose, modify, test and repair VPS scripts directly from the terminal.
+
+The goal is simple:
+
+> Tell the AI what is broken, and let the agent inspect and fix the VPS itself.
+
+---
 
 ## Features
 
-- Root VPS auto-repair
-- Execute Linux commands through AI tool calls
-- Read and inspect VPS files
-- Create and modify scripts
-- Automatic syntax checking with `bash -n`
-- Automatic command/service testing
-- Timestamped backups before important script changes
-- Command execution timeout to prevent accidental hangs
-- Local execution log
-- VLEEE API endpoint:
-  `https://api.vleee.net/v1`
-- Model:
-  `gpt-5.6-luna`
+- AI-powered VPS troubleshooting and repair
+- Runs with root privileges
+- Executes Linux commands directly
+- Inspects files, symlinks, services, logs and configurations
+- Creates and modifies VPS scripts
+- Creates backups before important changes
+- Bash syntax checking
+- Tests repaired commands and services
+- Continues troubleshooting when the first fix fails
+- Local execution logging
+- API key stored locally with permission `600`
+- VLEEE API: `https://api.vleee.net/v1`
+- Model: `gpt-5.6-luna`
+
+---
+
+## Supported Operating Systems
+
+The current installer uses `apt-get`, so the supported operating systems are Debian/Ubuntu based Linux distributions.
+
+| Operating System | Status |
+|---|---|
+| Debian 12 (Bookworm) | ✅ Supported |
+| Debian 13 (Trixie) | ✅ Supported |
+| Ubuntu 22.04 LTS | ✅ Supported |
+| Ubuntu 24.04 LTS | ✅ Supported |
+| Ubuntu 26.04 LTS | ✅ Supported |
+| Debian 11 | ⚠️ Not recommended |
+| Ubuntu 20.04 | ⚠️ EOL / not recommended |
+| Rocky Linux | ❌ Not supported by current installer |
+| AlmaLinux | ❌ Not supported by current installer |
+| CentOS Stream | ❌ Not supported by current installer |
+| Fedora | ❌ Not supported by current installer |
+| Alpine Linux | ❌ Not supported by current installer |
+
+### Requirements
+
+- 64-bit Linux VPS
+- Root access
+- `apt-get`
+- Internet connection
+- `bash`
+- `curl`
+- `jq`
+- Outbound HTTPS access to `api.vleee.net`
+
+The installer installs the required dependencies on supported Debian/Ubuntu systems.
+
+---
 
 ## Installation
 
-Run as root:
+Run the installer as root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/install.sh | bash
 ```
 
-The installer will ask:
+During installation you will be asked to enter your VLEEE API key:
 
 ```text
 VLEEE API Key:
@@ -40,18 +82,26 @@ The key is stored locally at:
 /root/.openai_key
 ```
 
-with permission `600`.
+with permission:
+
+```text
+600
+```
 
 The installer then:
 
-1. Installs required dependencies.
-2. Saves the API key securely.
-3. Backs up an existing `/usr/local/bin/ai`.
-4. Installs the VLEEE AI Agent.
-5. Runs a shell syntax check.
-6. Tests the VLEEE API.
+1. Checks the operating system.
+2. Installs required dependencies.
+3. Requests the VLEEE API key.
+4. Saves the API key securely.
+5. Backs up an existing AI agent.
+6. Installs the VLEEE AI Agent.
+7. Checks the script syntax.
+8. Tests the VLEEE API connection.
 
-## Start
+---
+
+## Start the Agent
 
 After installation:
 
@@ -62,80 +112,130 @@ ai
 Example:
 
 ```text
-AI > aku tak boleh pakai command "menu". tolong fix
+AI > aku tak boleh pakai command "menu". tolong fix sampai boleh.
 ```
 
-The agent is designed to inspect the VPS itself instead of simply telling the user which commands to run.
+The agent is designed to inspect the VPS itself and perform the repair.
 
-For example, it can inspect:
+It should not simply ask the user to manually run diagnostic commands when it has the ability to execute those commands itself.
+
+---
+
+## Example: Fixing a Broken VPS Menu
+
+For example, if:
+
+```bash
+menu
+```
+
+returns:
+
+```text
+/usr/local/bin/menu: line 2: /usr/local/xraayvpn/bin/menu: Success
+```
+
+you can tell the agent:
+
+```text
+AI > aku tak boleh pakai command "menu". tolong fix sampai boleh.
+```
+
+The agent can inspect:
 
 ```text
 /usr/local/bin/menu
 /usr/bin/menu
 /usr/local/xraayvpn/bin/menu
-/opt/ejvpn
+/opt
+/root
 ```
 
-It can then backup, repair, syntax-check and test the affected script.
+and search for valid backups or copies of the original menu.
 
-## Example workflow
+A typical repair workflow:
 
 ```text
-AI > menu tak function. fix sampai boleh buka menu asal dan submenu.
-
 [EXECUTE] type -a menu
+[EXECUTE] command -v menu
 [EXECUTE] readlink -f /usr/local/bin/menu
+[EXECUTE] ls -lah /usr/local/bin/menu /usr/bin/menu
 [EXECUTE] ls -lah /usr/local/xraayvpn/bin/menu
 [EXECUTE] file /usr/local/xraayvpn/bin/menu
-[EXECUTE] find ... backup ...
-[EXECUTE] cp ... backup ...
-[EXECUTE] chmod ...
-[EXECUTE] bash -n ...
-[EXECUTE] menu
+[EXECUTE] find backup copies
+[EXECUTE] backup current files
+[EXECUTE] restore valid menu
+[EXECUTE] chmod 755
+[EXECUTE] bash -n
+[EXECUTE] test menu
 ```
 
-If the first repair fails, the agent can continue the diagnosis using the command result.
+If the first repair fails, the agent should continue diagnosing instead of stopping immediately.
 
-## API Key
+When a valid original menu or backup exists, the agent should prefer restoring it rather than replacing the original VPS menu with an unrelated minimal menu.
 
-The key is never hard-coded into the repository.
+---
 
-During installation it is requested interactively and stored at:
+## Agent Workflow
+
+The agent is instructed to follow this workflow:
+
+```text
+1. Understand the request
+2. Inspect the VPS
+3. Identify the root cause
+4. Create a backup
+5. Apply the smallest correct fix
+6. Syntax-check the change
+7. Test the result
+8. Continue fixing if the test fails
+9. Verify the final result
+10. Report completion
+```
+
+This is especially useful for VPS scripts where the problem may involve several files, symlinks, permissions, services or dependencies.
+
+---
+
+## API Configuration
+
+The agent uses:
+
+```text
+API Base:
+https://api.vleee.net/v1
+
+Responses API:
+https://api.vleee.net/v1/responses
+
+Model:
+gpt-5.6-luna
+```
+
+The API key is not hard-coded into the repository.
+
+During installation it is requested interactively and saved to:
 
 ```text
 /root/.openai_key
 ```
 
-The file is created with restrictive permissions:
+Do not commit your API key to GitHub.
 
-```text
-600
-```
+Never put API keys in:
 
-Do **not** put your API key inside `install.sh`, `README.md`, GitHub commits, issues or screenshots.
+- `install.sh`
+- `README.md`
+- Git commits
+- GitHub Issues
+- screenshots
+- public configuration files
 
-## Logs
+---
 
-Execution logs are stored at:
+## Installed Files
 
-```text
-/var/log/vleee-ai-agent.log
-```
-
-The log contains executed commands and their exit codes.
-
-Secrets should not be intentionally printed or stored.
-
-## Configuration
-
-The agent uses:
-
-```text
-API:   https://api.vleee.net/v1/responses
-Model: gpt-5.6-luna
-```
-
-The installed agent is:
+Main agent:
 
 ```text
 /usr/local/bin/ai
@@ -147,23 +247,107 @@ API key:
 /root/.openai_key
 ```
 
-## Safety
+Execution log:
 
-This agent has **root access** and can modify the VPS.
+```text
+/var/log/vleee-ai-agent.log
+```
 
-Use it only on VPS systems you own or are authorized to administer.
+Existing AI installations are backed up with a timestamp before replacement.
+
+Example:
+
+```text
+/usr/local/bin/ai.backup.20260915-123456
+```
+
+---
+
+## Logs
+
+Execution information is written to:
+
+```text
+/var/log/vleee-ai-agent.log
+```
+
+The log can be used to review commands executed by the agent and their exit codes.
+
+The agent is instructed not to intentionally expose:
+
+- API keys
+- passwords
+- private keys
+- cookies
+- tokens
+- other credentials
+
+---
+
+## Change API Key
+
+To replace the API key without reinstalling:
+
+```bash
+read -r -s -p "VLEEE API Key: " KEY
+echo
+printf '%s\n' "$KEY" > /root/.openai_key
+chmod 600 /root/.openai_key
+unset KEY
+```
+
+Then:
+
+```bash
+ai
+```
+
+---
+
+## Manual API Test
+
+You can test the VLEEE API directly:
+
+```bash
+curl -sS https://api.vleee.net/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $(cat /root/.openai_key)" \
+  -d '{"model":"gpt-5.6-luna","input":"Reply exactly: VLEEE AI OK"}' | jq .
+```
+
+A successful response should contain a response object and the configured model.
+
+---
+
+## Security
+
+This is a **root-level autonomous VPS agent**.
+
+The agent can modify:
+
+- system files
+- VPS scripts
+- services
+- configurations
+- permissions
+
+Only use it on VPS systems that you own or are authorized to administer.
 
 The agent is instructed to:
 
 - inspect before changing important files
 - create backups before overwriting non-empty scripts
 - syntax-check shell scripts
-- test repairs
+- test changes after repairing them
 - avoid destructive disk operations
-- avoid reboot/shutdown unless explicitly requested
-- avoid exposing credentials and secrets
+- avoid unrelated data deletion
+- avoid rebooting or shutting down unless explicitly requested
+- avoid exposing credentials
+- prefer targeted repairs instead of blindly reinstalling components
 
-Root-level AI automation can still make mistakes. Review important changes before deploying to production.
+Root-level automation can still make mistakes. Review important production changes when appropriate.
+
+---
 
 ## Uninstall
 
@@ -173,17 +357,31 @@ Remove the agent:
 rm -f /usr/local/bin/ai
 ```
 
-The API key can be removed with:
+Remove the API key:
 
 ```bash
 rm -f /root/.openai_key
 ```
 
-Remove the log if desired:
+Remove the log:
 
 ```bash
 rm -f /var/log/vleee-ai-agent.log
 ```
+
+---
+
+## Repository
+
+GitHub:
+
+https://github.com/ejaywattapak/vleevps
+
+Installer:
+
+https://raw.githubusercontent.com/ejaywattapak/vleevps/main/install.sh
+
+---
 
 ## License
 
