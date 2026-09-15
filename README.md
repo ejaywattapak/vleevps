@@ -1,48 +1,89 @@
 # VLEEE AI VPS Agent
 
-VLEEE AI VPS Agent ialah AI terminal untuk membantu mendiagnosis dan membaiki script/service pada VPS menggunakan VLEEE API.
+AI terminal assistant untuk membantu diagnose dan troubleshoot script, service dan configuration VPS menggunakan VLEEE API.
 
-## Requirements
+## Supported OS
 
-### Supported OS
+- Ubuntu 22.04
+- Ubuntu 24.04
+- Debian 11
+- Debian 12
+- Debian 13
 
-- Ubuntu 22.04 / 24.04
-- Debian 11 / 12 / 13
-- Linux distributions berasaskan Debian/Ubuntu yang menyediakan `apt-get`
+OS Debian/Ubuntu-based dengan `apt-get` juga mungkin berfungsi.
 
-Installer memerlukan akses **root**.
+**Installer mesti dijalankan sebagai root.**
 
 ## Installation
 
-Jika VPS belum mempunyai `curl`, install dahulu:
+Jika `curl` belum ada:
 
 ```bash
 apt-get update && apt-get install -y curl ca-certificates
 ```
 
-Kemudian jalankan installer:
+Kemudian:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/install.sh | bash
 ```
 
-Installer akan:
+### API key
 
-1. Check/install `curl` dan `jq`
-2. Minta **VLEEE API key**
-3. Simpan key ke `/root/.openai_key`
-4. Set permission key kepada `600`
-5. Backup `/usr/local/bin/ai` jika sudah ada
-6. Install command `ai`
-7. Test API
-8. Jika API key invalid, installation dihentikan dan key yang invalid dipadam
+Installer akan **berhenti di prompt API key dan menunggu input**.
 
-### API
+Installer membaca input daripada `/dev/tty`, jadi walaupun command menggunakan:
+
+```bash
+curl ... | bash
+```
+
+input API key tidak akan hilang ke dalam pipe.
+
+Contoh:
 
 ```text
-API: https://api.vleee.net/v1
-Model: gpt-5.6-luna
+◆ [2/6] VLEEE API key
+
+➜ Masukkan VLEEE API key: YOUR_KEY_HERE
 ```
+
+**Jika belum masukkan key, installer tidak akan meneruskan installation atau API test.**
+
+## API
+
+```text
+API   : https://api.vleee.net/v1
+MODEL : gpt-5.6-luna
+```
+
+Endpoint yang digunakan:
+
+```text
+https://api.vleee.net/v1/responses
+```
+
+## API Key
+
+Key disimpan secara local:
+
+```text
+/root/.openai_key
+```
+
+Permission:
+
+```text
+600
+```
+
+Jangan upload API key ke GitHub.
+
+### Nak beli API key
+
+Telegram:
+
+**@ejaywattapak**
 
 ## Usage
 
@@ -55,45 +96,35 @@ ai
 Contoh:
 
 ```text
-AI > tengok kenapa command menu tak function
+AI > aku tak boleh pakai command menu, tolong diagnose dan fix
 ```
 
-Agent boleh digunakan untuk membantu menganalisis output, script, service, permission, config dan masalah VPS.
+## Installer Features
 
-## API Key
-
-API key diperlukan untuk menggunakan agent.
-
-**Nak beli API key VLEEE:** Telegram `@ejaywattapak`
-
-Jangan upload atau commit API key ke GitHub.
-
-Key disimpan secara lokal:
-
-```text
-/root/.openai_key
-```
-
-Permission:
-
-```text
-600
-```
+- Modern terminal installer UI
+- Automatic dependency installation
+- Safe interactive API-key input
+- Works with `curl ... | bash`
+- API key validation
+- API key permission `600`
+- Backup agent lama
+- Syntax check
+- VLEEE API connectivity test
+- GPT-5.6 Luna
+- Automatic cleanup jika API key invalid
 
 ## Security
 
-Jangan kongsi:
+Jangan masukkan ke repository:
 
 - API key
-- Password VPS
-- Private SSH key
-- Token
-- Credential database
+- VPS password
+- SSH private key
+- Database credentials
+- Secret tokens
 
-Gunakan agent hanya pada VPS yang anda miliki atau mempunyai kebenaran untuk anda urus.
+Gunakan agent hanya pada VPS yang anda miliki atau mempunyai kebenaran untuk urus.
 
 ## Repository
 
-GitHub:
-
-`https://github.com/ejaywattapak/vleevps`
+https://github.com/ejaywattapak/vleevps
