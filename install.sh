@@ -28,7 +28,7 @@ echo
 export DEBIAN_FRONTEND=noninteractive
 echo -e "${C}◆ [1/6] Installing dependencies${N}"
 apt-get update
-apt-get install -y curl jq ca-certificates
+apt-get install -y curl jq ca-certificates python3
 echo -e "${G}✔ Dependencies ready${N}\n"
 
 echo -e "${C}◆ [2/6] API key${N}"
@@ -216,11 +216,38 @@ EOF
         DECISION="$(echo "$RESPONSE" | jq -r '[.output[]?.content[]? | select(.type=="output_text") | .text] | join("\n")' 2>/dev/null)"
         [[ -n "$DECISION" ]] || { die "API returned no output_text."; break; }
 
-        if ! echo "$DECISION" | jq -e 'type=="object" and (.action|type)=="string"' >/dev/null 2>&1; then
+        # Normalize common model formatting before parsing. The model may wrap
+        # JSON in markdown fences or return surrounding whitespace.
+        CLEAN_DECISION="$(printf '%s' "$DECISION" | sed -E 's/^[[:space:]]*```(json)?[[:space:]]*//; s/[[:space:]]*```[[:space:]]*$//')"
+        CLEAN_DECISION="$(printf '%s' "$CLEAN_DECISION" | sed -n '/^[[:space:]]*{/,$p' | sed -n '1,/^[[:space:]]*}[[:space:]]*$/p')"
+
+        # If the response contains more than one JSON object, extract the first
+        # complete object rather than rejecting an otherwise usable action.
+        if ! printf '%s' "$CLEAN_DECISION" | jq -e 'type=="object" and (.action|type)=="string"' >/dev/null 2>&1; then
+            EXTRACTED="$(printf '%s' "$DECISION" | python3 -c '
+import sys, json
+s=sys.stdin.read()
+decoder=json.JSONDecoder()
+for i,c in enumerate(s):
+    if c=="{":
+        try:
+            obj,end=decoder.raw_decode(s[i:])
+            if isinstance(obj,dict) and isinstance(obj.get("action"),str):
+                print(json.dumps(obj,separators=(",",":")))
+                raise SystemExit
+        except Exception:
+            pass
+sys.exit(1)
+' 2>/dev/null || true)"
+            [[ -n "$EXTRACTED" ]] && CLEAN_DECISION="$EXTRACTED"
+        fi
+
+        if ! printf '%s' "$CLEAN_DECISION" | jq -e 'type=="object" and (.action|type)=="string"' >/dev/null 2>&1; then
             echo -e "${R}ERROR: AI returned invalid JSON action:${N}"
             echo "$DECISION"
             break
         fi
+        DECISION="$CLEAN_DECISION"
 
         ACTION="$(echo "$DECISION" | jq -r '.action')"
         if [[ "$ACTION" == "finish" ]]; then
