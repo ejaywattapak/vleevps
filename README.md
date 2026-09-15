@@ -1,3 +1,19 @@
+## Quick Install
+
+If your VPS does not have `curl`, install it first:
+
+```bash
+apt-get update && apt-get install -y curl ca-certificates
+```
+
+Then run the VLEEE VPS AI Agent installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/install.sh | bash
+```
+
+During installation, the installer will ask you to enter your VLEEE API key. The key is stored locally on the VPS and is not included in this repository.
+
 # VLEEE AI VPS Agent
 
 VLEEE AI VPS Agent is a root-level terminal AI agent for Linux VPS administration.
