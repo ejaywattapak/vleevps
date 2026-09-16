@@ -1,332 +1,53 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -Eeuo pipefail
+API_BASE='https://api.vleee.net/v1'; MODEL='gpt-5.6-luna'; KEY_FILE='/root/.openai_key'; AGENT='/usr/local/bin/ai'; BACKUP='/root/.vleevps/backups'
+R='\033[0m'; C='\033[1;36m'; G='\033[1;32m'; Y='\033[1;33m'; X='\033[1;31m'; B='\033[1m'
+die(){ echo -e "${X}✖ $*${R}"; exit 1; }
+[ "$EUID" -eq 0 ] || die 'Run as root.'
+clear; echo -e "${C}${B}╭──────────────────────────────────────────────────────╮\n│              VLEEE AI VPS AGENT                     │\n│          Autonomous VPS Repair & Tools              │\n╰──────────────────────────────────────────────────────╯${R}"
+echo "  API   : $API_BASE"; echo "  MODEL : $MODEL"; echo
 
-API_BASE="https://api.vleee.net/v1"
-API_URL="${API_BASE}/responses"
-MODEL="gpt-5.6-luna"
-KEY_FILE="/root/.openai_key"
-AGENT="/usr/local/bin/ai"
-BACKUP_DIR="/root/.vleevps/backups"
+echo -e "${C}◆ [1/6] Check dependencies${R}"
+if ! command -v curl >/dev/null || ! command -v jq >/dev/null; then apt-get update && apt-get install -y curl jq ca-certificates; fi
+command -v curl >/dev/null || die 'curl installation failed.'; command -v jq >/dev/null || die 'jq installation failed.'
+echo -e "${G}✔ Dependencies OK${R}"
 
-C='\033[1;36m'; G='\033[1;32m'; Y='\033[1;33m'; R='\033[1;31m'
-W='\033[1;37m'; D='\033[2m'; N='\033[0m'
+echo; echo -e "${C}◆ [2/6] API key${R}"
+echo 'Masukkan VLEEE API key.'; echo 'Input dibaca dari /dev/tty supaya curl ... | bash tidak skip.'
+while :; do IFS= read -r -s -p '➜ VLEEE API key: ' API_KEY </dev/tty; echo; API_KEY="${API_KEY//$'\r'/}"; [ -n "$API_KEY" ] && break; echo -e "${Y}⚠ API key kosong. Sila masukkan key.${R}"; done
+umask 077; printf '%s\n' "$API_KEY" > "$KEY_FILE"; chmod 600 "$KEY_FILE"
 
-die(){ echo -e "${R}✖ $*${N}"; exit 1; }
-[[ $EUID -eq 0 ]] || die "Jalankan installer sebagai root."
-command -v apt-get >/dev/null || die "OS ini tidak menggunakan apt-get. Gunakan Debian/Ubuntu."
+echo; echo -e "${C}◆ [3/6] Backup existing agent${R}"; mkdir -p "$BACKUP"; chmod 700 "$BACKUP"
+if [ -f "$AGENT" ]; then cp -a "$AGENT" "$BACKUP/ai.$(date +%Y%m%d-%H%M%S)"; echo -e "${G}✔ Existing agent backed up${R}"; else echo '• No existing agent.'; fi
 
-clear
-echo -e "${C}╔════════════════════════════════════════════════════════════╗${N}"
-echo -e "${C}║${W}                 VLEEE AI VPS AGENT                       ${C}║${N}"
-echo -e "${C}║${N}              Autonomous VPS Troubleshooter               ${C}║${N}"
-echo -e "${C}╠════════════════════════════════════════════════════════════╣${N}"
-echo -e "${C}║${N} API   : ${W}${API_BASE}${N}"
-echo -e "${C}║${N} MODEL : ${W}${MODEL}${N}"
-echo -e "${C}╚════════════════════════════════════════════════════════════╝${N}"
-echo
-
-export DEBIAN_FRONTEND=noninteractive
-echo -e "${C}◆ [1/6] Installing dependencies${N}"
-apt-get update
-apt-get install -y curl jq ca-certificates python3
-echo -e "${G}✔ Dependencies ready${N}\n"
-
-echo -e "${C}◆ [2/6] API key${N}"
-echo -e "${D}Prompt menggunakan /dev/tty supaya curl ... | bash tidak skip input.${N}"
-API_KEY=""
-while [[ -z "$API_KEY" ]]; do
-    printf "%b" "${Y}➜ Masukkan VLEEE API key: ${N}" > /dev/tty
-    IFS= read -r API_KEY < /dev/tty || true
-    API_KEY="${API_KEY//$'\r'/}"
-    [[ -n "$API_KEY" ]] || echo -e "${R}✖ API key kosong. Cuba lagi.${N}" > /dev/tty
-done
-umask 077
-printf '%s\n' "$API_KEY" > "$KEY_FILE"
-chmod 600 "$KEY_FILE"
-echo -e "${G}✔ API key saved with permission 600${N}\n"
-
-echo -e "${C}◆ [3/6] Backup existing agent${N}"
-mkdir -p "$BACKUP_DIR"
-if [[ -f "$AGENT" ]]; then
-    cp -a "$AGENT" "$BACKUP_DIR/ai.$(date +%Y%m%d-%H%M%S)"
-    echo -e "${G}✔ Existing agent backed up${N}"
-else
-    echo -e "${G}✔ No existing agent${N}"
-fi
-echo
-
-echo -e "${C}◆ [4/6] Installing autonomous agent${N}"
+echo; echo -e "${C}◆ [4/6] Installing autonomous agent${R}"
 cat > "$AGENT" <<'AI'
-#!/usr/bin/env bash
-set -u
-API_BASE="https://api.vleee.net/v1"
-API_URL="${API_BASE}/responses"
-MODEL="gpt-5.6-luna"
-KEY_FILE="/root/.openai_key"
-MAX_STEPS=30
-TIMEOUT=600
-C='\033[1;36m'; G='\033[1;32m'; Y='\033[1;33m'; R='\033[1;31m'; W='\033[1;37m'; D='\033[2m'; N='\033[0m'
-
-die(){ echo -e "${R}ERROR: $*${N}"; }
-[[ -s "$KEY_FILE" ]] || { die "API key tidak dijumpai: $KEY_FILE"; exit 1; }
-API_KEY="$(<"$KEY_FILE")"
-
-SYSTEM_PROMPT=$(cat <<'SYS'
-You are VLEEE AI VPS Agent, a root-level Linux troubleshooting and repair agent.
-You have REAL command execution access through the local executor. Do not ask the user to paste files or command output when you can inspect the VPS yourself.
-
-Your job:
-1. Inspect first.
-2. Diagnose from real command output.
-3. Before changing a file, create a timestamped backup when practical.
-4. Make the smallest correct repair.
-5. Run syntax/config checks after changes.
-6. Restart/reload services only when needed.
-7. Verify the original problem is actually fixed.
-8. Continue autonomously until fixed or until a safe blocker is reached.
-
-IMPORTANT:
-- The VPS belongs to the operator who launched you. You may inspect and modify its scripts/services/configuration to fulfill the user's request.
-- Never expose API keys, passwords, private keys, cookies, or other secrets in your final answer. Avoid printing them in commands/output.
-- Do not blindly overwrite a working script with a guessed replacement.
-- Prefer existing backups, repositories, installed copies, and package files when restoring missing scripts.
-- Avoid destructive commands such as `rm -rf /`, disk formatting, deleting unrelated user data, or disabling security controls. If such an action would be required, stop and explain.
-- For service changes, verify with systemctl status/logs or an equivalent check.
-- You may install normal packages required for diagnosis/repair.
-
-OUTPUT FORMAT:
-Return EXACTLY one JSON object and nothing else.
-
-For a command:
-{"action":"execute","command":"...","reason":"short reason"}
-
-For writing a file:
-{"action":"write_file","path":"/absolute/path","content":"FULL FILE CONTENT","reason":"short reason"}
-
-For a safe final response:
-{"action":"finish","message":"what was checked, what was changed, and verification result"}
-
-For a safe pause when human approval is genuinely required:
-{"action":"ask","message":"what approval is needed"}
-
-Rules:
-- One action per response.
-- Commands must be non-interactive.
-- Use absolute paths.
-- Never use sudo; you already have root.
-- When checking a suspected empty file, use stat/wc/file/head and then search backups/copies before recreating anything.
-SYS
-)
-
-run_action() {
-    local json="$1"
-    ACTION="$(jq -r '.action // empty' <<<"$json")"
-    case "$ACTION" in
-        execute)
-            CMD="$(jq -r '.command // empty' <<<"$json")"
-            [[ -n "$CMD" ]] || return 2
-            echo -e "${C}[exec]${N} $CMD"
-            EXEC_OUT="$(timeout "$TIMEOUT" bash -lc "$CMD" 2>&1)"
-            EXEC_RC=$?
-            printf '%s\n' "$EXEC_OUT"
-            return 0
-            ;;
-        write_file)
-            PATH_TO_WRITE="$(jq -r '.path // empty' <<<"$json")"
-            CONTENT="$(jq -r '.content // empty' <<<"$json")"
-            [[ "$PATH_TO_WRITE" == /* && -n "$PATH_TO_WRITE" ]] || return 2
-            mkdir -p "$(dirname "$PATH_TO_WRITE")"
-            if [[ -e "$PATH_TO_WRITE" ]]; then
-                BACKUP="/root/.vleevps/backups/$(echo "$PATH_TO_WRITE" | sed 's#/#_#g').$(date +%Y%m%d-%H%M%S)"
-                mkdir -p /root/.vleevps/backups
-                cp -a "$PATH_TO_WRITE" "$BACKUP"
-                echo -e "${C}[backup]${N} $BACKUP"
-            fi
-            printf '%s' "$CONTENT" > "$PATH_TO_WRITE"
-            echo -e "${G}[write]${N} $PATH_TO_WRITE"
-            return 0
-            ;;
-        finish)
-            jq -r '.message // "Selesai."' <<<"$json"
-            return 10
-            ;;
-        ask)
-            echo
-            echo -e "${Y}AI memerlukan pengesahan:${N}"
-            jq -r '.message // empty' <<<"$json"
-            return 11
-            ;;
-        *)
-            echo -e "${R}AI returned invalid action.${N}"
-            return 2
-            ;;
-    esac
-}
-
-clear
-echo -e "${C}╔════════════════════════════════════════════════════════════╗${N}"
-echo -e "${C}║${W}                  VLEEE AI VPS AGENT                      ${C}║${N}"
-echo -e "${C}║${N}              REAL VPS COMMAND EXECUTION                  ${C}║${N}"
-echo -e "${C}╠════════════════════════════════════════════════════════════╣${N}"
-echo -e "${C}║${N} Model : ${W}${MODEL}${N}"
-echo -e "${C}║${N} Mode  : ${G}AUTONOMOUS${N}"
-echo -e "${C}║${N} Type  : ${W}exit${N} untuk keluar"
-echo -e "${C}╚════════════════════════════════════════════════════════════╝${N}"
-echo
-
-while true; do
-    printf "%b" "${C}AI ${N}> "
-    IFS= read -r USER_PROMPT || break
-    [[ "$USER_PROMPT" == "exit" ]] && break
-    [[ -z "$USER_PROMPT" ]] && continue
-
-    HISTORY=""
-    STEP=0
-    while (( STEP < MAX_STEPS )); do
-        ((STEP+=1))
-        INPUT=$(cat <<EOF
-${SYSTEM_PROMPT}
-
-TASK FROM USER:
-${USER_PROMPT}
-
-EXECUTION HISTORY:
-${HISTORY:-No commands have been executed yet.}
-
-You are on step ${STEP}/${MAX_STEPS}. Choose exactly one action.
-EOF
-)
-        PAYLOAD="$(jq -n --arg model "$MODEL" --arg input "$INPUT" '{model:$model,input:$input}')"
-        RESPONSE="$(curl -sS --connect-timeout 20 --max-time "$TIMEOUT" "$API_URL" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $API_KEY" \
-            -d "$PAYLOAD" 2>&1)"
-        RC=$?
-        if ((RC != 0)); then
-            die "API request failed."
-            echo "$RESPONSE"
-            break
-        fi
-        if echo "$RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
-            echo -e "${R}ERROR:${N}"
-            echo "$RESPONSE" | jq -r 'if (.error|type)=="object" then (.error.message // (.error|tostring)) else (.error|tostring) end'
-            break
-        fi
-
-        DECISION="$(echo "$RESPONSE" | jq -r '[.output[]?.content[]? | select(.type=="output_text") | .text] | join("\n")' 2>/dev/null)"
-        [[ -n "$DECISION" ]] || { die "API returned no output_text."; break; }
-
-        # Normalize common model formatting before parsing. The model may wrap
-        # JSON in markdown fences or return surrounding whitespace.
-        CLEAN_DECISION="$(printf '%s' "$DECISION" | sed -E 's/^[[:space:]]*```(json)?[[:space:]]*//; s/[[:space:]]*```[[:space:]]*$//')"
-        CLEAN_DECISION="$(printf '%s' "$CLEAN_DECISION" | sed -n '/^[[:space:]]*{/,$p' | sed -n '1,/^[[:space:]]*}[[:space:]]*$/p')"
-
-        # If the response contains more than one JSON object, extract the first
-        # complete object rather than rejecting an otherwise usable action.
-        if ! printf '%s' "$CLEAN_DECISION" | jq -e 'type=="object" and (.action|type)=="string"' >/dev/null 2>&1; then
-            EXTRACTED="$(printf '%s' "$DECISION" | python3 -c '
-import sys, json
-s=sys.stdin.read()
-decoder=json.JSONDecoder()
-for i,c in enumerate(s):
-    if c=="{":
-        try:
-            obj,end=decoder.raw_decode(s[i:])
-            if isinstance(obj,dict) and isinstance(obj.get("action"),str):
-                print(json.dumps(obj,separators=(",",":")))
-                raise SystemExit
-        except Exception:
-            pass
-sys.exit(1)
-' 2>/dev/null || true)"
-            [[ -n "$EXTRACTED" ]] && CLEAN_DECISION="$EXTRACTED"
-        fi
-
-        if ! printf '%s' "$CLEAN_DECISION" | jq -e 'type=="object" and (.action|type)=="string"' >/dev/null 2>&1; then
-            echo -e "${R}ERROR: AI returned invalid JSON action:${N}"
-            echo "$DECISION"
-            break
-        fi
-        DECISION="$CLEAN_DECISION"
-
-        ACTION="$(echo "$DECISION" | jq -r '.action')"
-        if [[ "$ACTION" == "finish" ]]; then
-            echo
-            echo "$DECISION" | jq -r '.message'
-            echo
-            break
-        fi
-        if [[ "$ACTION" == "ask" ]]; then
-            echo
-            echo "$DECISION" | jq -r '.message'
-            echo
-            break
-        fi
-
-        OUTPUT_FILE="$(mktemp)"
-        run_action "$DECISION" > "$OUTPUT_FILE"
-        EXEC_STATUS=$?
-        OUTPUT="$(cat "$OUTPUT_FILE")"
-        rm -f "$OUTPUT_FILE"
-
-        HISTORY="${HISTORY}
-
-STEP ${STEP}
-ACTION:
-${DECISION}
-RESULT:
-${OUTPUT}
-"
-        if ((EXEC_STATUS == 2)); then
-            HISTORY="${HISTORY}
-Executor rejected the action. Choose a safer/correct action.
-"
-        fi
-        if ((EXEC_STATUS == 10 || EXEC_STATUS == 11)); then break; fi
-    done
-done
+#!/bin/bash
+set -Eeuo pipefail
+API_BASE='https://api.vleee.net/v1'; MODEL='gpt-5.6-luna'; KEY_FILE='/root/.openai_key'; BACKUP='/root/.vleevps/backups'; TIMEOUT=180
+R='\033[0m'; C='\033[1;36m'; G='\033[1;32m'; Y='\033[1;33m'; X='\033[1;31m'; B='\033[1m'; D='\033[2m'
+key(){ [ -s "$KEY_FILE" ] && tr -d '\r\n' < "$KEY_FILE"; }
+backup(){ [ -f "$1" ] || return 0; mkdir -p "$BACKUP"; cp -a "$1" "$BACKUP/$(printf '%s' "$1"|sed 's#/#_#g').$(date +%Y%m%d-%H%M%S)"; echo -e "${D}[backup] $1${R}"; }
+run(){ local c="$1"; case "$c" in 'rm -rf /'|'rm -rf /*'|'mkfs'|'mkfs '*|'shutdown '*|'reboot '*) echo -e "${X}[blocked] dangerous command${R}"; return 125;; esac; echo -e "${Y}[exec]${R} $c"; bash -lc "$c"; }
+write_file(){ local p="$1"; local v="$2"; case "$p" in /*) ;; *) return 2;; esac; [ -f "$p" ] && backup "$p"; mkdir -p "$(dirname "$p")"; printf '%s\n' "$v" > "$p"; echo -e "${G}[write]${R} $p"; }
+text(){ jq -r '[.output[]?.content[]?|select(.type=="output_text")|.text]|join("\n")'; }
+agent(){ local req="$1" n=1 max=12 resp txt clean act cmd path content msg input k; local sys='You are VLEEE AI VPS Agent running as root on the user'7s own VPS. Inspect the VPS yourself, diagnose, repair and verify. Do not ask the user to paste files you can inspect. Do not merely give commands when you can execute them. Before changing an existing file, inspect it and make a backup. Never claim success without verification. Every response must be exactly one JSON object. Allowed actions: {"action":"execute","command":"...","reason":"..."} OR {"action":"write_file","path":"/absolute/path","content":"...","reason":"..."} OR {"action":"final","message":"..."}. Do not expose secrets. Do not use destructive system-wide commands. Use absolute paths. Continue through multiple steps until complete.'
+while [ $n -le $max ]; do echo -e "${C}[AI step $n/$max]${R} inspecting / repairing..."; k="$(key)"; input="$(jq -n --arg s "$sys" --arg r "$req" --arg n "$n" '$s+"\n\nUser request:\n"+$r+"\n\nRepair step "+$n+". Act now."')"; resp="$(curl -sS --connect-timeout 20 --max-time "$TIMEOUT" "$API_BASE/responses" -H 'Content-Type: application/json' -H "Authorization: Bearer $k" -d "$(jq -n --arg m "$MODEL" --arg i "$input" '{model:$m,input:$i}')")" || { echo -e "${X}✖ VLEEE connection failed${R}"; return 1; }; if jq -e '.error' >/dev/null 2>&1 <<<"$resp"; then jq -r '.error.message // "API error"' <<<"$resp"; return 1; fi; txt="$(printf '%s' "$resp"|text)"; clean="$(printf '%s' "$txt"|sed -e 's/^```json[[:space:]]*$//' -e 's/^```[[:space:]]*$//')"; act="$(jq -r '.action // empty' <<<"$clean" 2>/dev/null || true)"; [ -n "$act" ] || { echo -e "${X}ERROR: AI returned invalid JSON action:${R}"; printf '%s\n' "$txt"; return 1; }; case "$act" in execute) cmd="$(jq -r '.command // empty' <<<"$clean")"; [ -n "$cmd" ] || return 1; run "$cmd" || true;; write_file) path="$(jq -r '.path // empty' <<<"$clean")"; content="$(jq -r '.content // empty' <<<"$clean")"; write_file "$path" "$content" || { echo -e "${X}Invalid write_file action${R}"; return 1; };; final) msg="$(jq -r '.message // "Done."' <<<"$clean")"; echo; echo -e "${G}${B}AI:${R} $msg"; return 0;; *) echo -e "${X}Unknown action: $act${R}"; return 1;; esac; n=$((n+1)); done; echo -e "${Y}AI reached the maximum repair steps ($max).${R}"; }
+show(){ local os cpu ram disk ip; . /etc/os-release 2>/dev/null || true; os="${PRETTY_NAME:-Linux}"; cpu="$(nproc 2>/dev/null||echo '?')"; ram="$(free -h 2>/dev/null|awk '/^Mem:/{print $2}'||echo '?')"; disk="$(df -h /|awk 'NR==2{print $2" total / "$4" free"}')"; ip="$(curl -4 -sS --max-time 5 https://ipv4.icanhazip.com 2>/dev/null|tr -d '\r\n'||echo unknown)"; echo -e "${C}${B}╭──────────────────────────────────────────────────────╮\n│                 VLEEE AI VPS AGENT                  │\n╰──────────────────────────────────────────────────────╯${R}"; printf '  OS     : %s\n  CPU    : %s cores\n  RAM    : %s\n  DISK   : %s\n  VPS IP : %s\n  MODEL  : %s\n' "$os" "$cpu" "$ram" "$disk" "$ip" "$MODEL"; }
+change_key(){ local nk old test typ; while :; do IFS= read -r -s -p '➜ New VLEEE API key: ' nk </dev/tty; echo; [ -n "$nk" ]&&break; done; old="$(key||true)"; printf '%s\n' "$nk">"$KEY_FILE"; chmod 600 "$KEY_FILE"; test="$(curl -sS --connect-timeout 20 --max-time 60 "$API_BASE/responses" -H 'Content-Type: application/json' -H "Authorization: Bearer $nk" -d "$(jq -n --arg m "$MODEL" '{model:$m,input:"Reply only: VLEEE AI OK"}')"||true)"; typ="$(jq -r '.error.type//empty'<<<"$test")"; if [ "$typ" = invalid_key ]||[ "$typ" = authentication_error ]; then [ -n "$old" ]&&printf '%s\n' "$old">"$KEY_FILE"; chmod 600 "$KEY_FILE"; echo -e "${X}✖ Invalid key. Previous key restored.${R}"; return 1; fi; echo -e "${G}✔ New key saved.${R}"; }
+test_api(){ local r; r="$(curl -sS --connect-timeout 20 --max-time 60 "$API_BASE/responses" -H 'Content-Type: application/json' -H "Authorization: Bearer $(key)" -d "$(jq -n --arg m "$MODEL" '{model:$m,input:"Reply only: VLEEE AI OK"}')"||true)"; if jq -e '.error' >/dev/null 2>&1<<<"$r"; then jq .<<<"$r"; return 1; fi; echo -e "${G}✔ VLEEE AI connection OK${R}"; text<<<"$r"; }
+terminal(){ echo -e "${C}${B}╔════════════════════════════════════════════════════╗\n║           VLEEE AI TERMINAL                       ║\n║           model: gpt-5.6-luna                      ║\n║           type 'exit' to quit                      ║\n╚════════════════════════════════════════════════════╝${R}"; while :; do printf 'AI > '; IFS= read -r p </dev/tty||break; [ "$p" = exit ]&&break; [ -z "$p" ]&&continue; agent "$p"; echo; done; }
+menu(){ while :; do clear; show; echo; echo '  ╭──────────────────────────────────────────────╮'; echo '  │  1) Change API key                           │'; echo '  │  2) Test API connection                      │'; echo '  │  3) Start AI terminal                        │'; echo '  │  4) Exit                                     │'; echo '  ╰──────────────────────────────────────────────╯'; read -r -p '  Select [1-4]: ' c </dev/tty; case "$c" in 1)change_key;read -r -p '  Press Enter...' _ </dev/tty;;2)test_api;read -r -p '  Press Enter...' _ </dev/tty;;3)terminal;return;;4)return;;*)sleep 1;;esac;done; }
+[ "${1:-}" = menu ]&&menu||{ [ $# -eq 0 ]&&terminal||agent "$*"; }
 AI
-chmod 700 "$AGENT"
-mkdir -p /root/.vleevps/backups
-echo -e "${G}✔ Agent installed${N}\n"
+chmod 700 "$AGENT"; bash -n "$AGENT"; echo -e "${G}✔ Agent installed and syntax OK${R}"
 
-echo -e "${C}◆ [5/6] Syntax & permissions${N}"
-bash -n "$AGENT"
-chmod 700 "$AGENT"
-chmod 600 "$KEY_FILE"
-echo -e "${G}✔ Syntax OK${N}"
-echo -e "${G}✔ /usr/local/bin/ai = 700${N}"
-echo -e "${G}✔ /root/.openai_key = 600${N}\n"
+echo; echo -e "${C}◆ [5/6] Permissions${R}"; chmod 700 "$AGENT"; chmod 600 "$KEY_FILE"; echo -e "${G}✔ /usr/local/bin/ai = 700${R}"; echo -e "${G}✔ /root/.openai_key = 600${R}"
 
-echo -e "${C}◆ [6/6] Testing VLEEE API${N}"
-TEST_PAYLOAD="$(jq -n --arg model "$MODEL" '{model:$model,input:"Return exactly: VLEEE AI OK"}')"
-TEST_RESPONSE="$(curl -sS --connect-timeout 20 --max-time 120 "$API_URL" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $API_KEY" \
-    -d "$TEST_PAYLOAD" 2>&1)"
-RC=$?
-if ((RC != 0)); then
-    echo "$TEST_RESPONSE"
-    rm -f "$KEY_FILE"
-    die "API test failed."
-    exit 1
-fi
-if echo "$TEST_RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
-    echo "$TEST_RESPONSE" | jq .
-    rm -f "$KEY_FILE"
-    die "API key ditolak. Key tidak disimpan."
-    exit 1
-fi
-TEST_TEXT="$(echo "$TEST_RESPONSE" | jq -r '[.output[]?.content[]? | select(.type=="output_text") | .text] | join("\n")')"
-[[ -n "$TEST_TEXT" ]] || { echo "$TEST_RESPONSE" | jq .; rm -f "$KEY_FILE"; die "API test returned no text."; exit 1; }
-
-echo -e "${G}✔ API connection OK${N}"
-echo -e "${G}✔ Response: ${TEST_TEXT}${N}\n"
-echo -e "${G}╔════════════════════════════════════════════════════════════╗${N}"
-echo -e "${G}║${W}                 INSTALLATION COMPLETE                    ${G}║${N}"
-echo -e "${G}╠════════════════════════════════════════════════════════════╣${N}"
-echo -e "${G}║${N} Command : ${W}ai${N}"
-echo -e "${G}║${N} Mode    : ${W}AUTONOMOUS VPS AGENT${N}"
-echo -e "${G}║${N} API     : ${W}${API_BASE}${N}"
-echo -e "${G}║${N} Model   : ${W}${MODEL}${N}"
-echo -e "${G}╚════════════════════════════════════════════════════════════╝${N}"
+echo; echo -e "${C}◆ [6/6] Testing VLEEE API${R}"
+TEST="$(curl -sS --connect-timeout 20 --max-time 60 "$API_BASE/responses" -H 'Content-Type: application/json' -H "Authorization: Bearer $API_KEY" -d "$(jq -n --arg m "$MODEL" '{model:$m,input:"Reply only: VLEEE AI OK"}')"||true)"
+printf '%s\n' "$TEST"|jq . 2>/dev/null || printf '%s\n' "$TEST"
+TYPE="$(printf '%s' "$TEST"|jq -r '.error.type//empty' 2>/dev/null||true)"; MSG="$(printf '%s' "$TEST"|jq -r '.error.message//empty' 2>/dev/null||true)"
+case "$TYPE" in invalid_key|authentication_error) rm -f "$KEY_FILE"; die 'API key invalid. Key removed.';; no_provider) echo -e "${Y}⚠ Key diterima, tetapi provider untuk $MODEL tidak tersedia. Key dikekalkan.${R}";; '') echo -e "${G}✔ VLEEE AI API connection OK${R}";; *) echo -e "${Y}⚠ API error: ${MSG:-unknown}. Key dikekalkan kerana bukan authentication error.${R}";; esac
+unset API_KEY TEST
+echo; echo -e "${G}${B}╭──────────────────────────────────────────────────────╮\n│              INSTALLATION COMPLETE                  │\n╰──────────────────────────────────────────────────────╯${R}"; echo '  Start AI : ai'; echo '  AI menu  : ai menu'; echo '  Key file : /root/.openai_key'; echo
