@@ -1,17 +1,18 @@
 # VLEE AI Agent
 
 ```text
-██╗   ██╗██╗     ███████╗███████╗     █████╗ ██╗
-██║   ██║██║     ██╔════╝██╔════╝    ██╔══██╗██║
-██║   ██║██║     █████╗  █████╗      ███████║██║
-╚██╗ ██╔╝██║     ██╔══╝  ██╔══╝      ██╔══██║██║
- ╚████╔╝ ███████╗███████╗███████╗    ██║  ██║██║
-  ╚═══╝  ╚══════╝╚══════╝╚══════╝    ╚═╝  ╚═╝╚═╝
+██╗   ██╗██╗     ███████╗███████╗
+██║   ██║██║     ██╔════╝██╔════╝
+██║   ██║██║     █████╗  █████╗
+╚██╗ ██╔╝██║     ██╔══╝  ██╔══╝
+ ╚████╔╝ ███████╗███████╗███████╗
+  ╚═══╝  ╚══════╝╚══════╝╚══════╝
+
+        VLEE AI AGENT BY EJAYWATAPAK
 ```
 
-**VLEE AI Agent by ejaywattapak**
-
 ### Support OS
+
 - Debian
 - Ubuntu
 - Rocky Linux
@@ -23,25 +24,22 @@
 ### Install
 
 ```bash
-bash install.sh
-```
-
-Or:
-
-```bash
-curl -fsSL <YOUR_RAW_GITHUB_INSTALL_URL> | bash
+curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/install.sh | bash
 ```
 
 ### Features
+
 - VLEEE API
-- GPT-5.6 Luna model
+- GPT-5.6 Luna
 - VPS AI terminal
 - API connection test
 - API key management
 - Model management
 - Automatic `figlet` installation
-- Automatic backup of existing agent
+- Automatic backup
 
-### Contact
+### Telegram
 
-Telegram: [@ejaywattapak](https://t.me/ejaywattapak)
+**@ejaywattapak**
+
+https://t.me/ejaywattapak
