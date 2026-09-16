@@ -8,38 +8,28 @@
  ╚████╔╝ ███████╗███████╗███████╗
   ╚═══╝  ╚══════╝╚══════╝╚══════╝
 
-        VLEE AI AGENT BY EJAYWATAPAK
+VLEE AI AGENT BY EJAYWATTAPAK
 ```
 
-### Support OS
+VPS autonomous AI agent using **GPT-5.6 Luna** through VLEEE.
 
+### Supported OS
 - Debian
 - Ubuntu
 - Rocky Linux
 - AlmaLinux
-- CentOS
-- Fedora
-- Alpine Linux
+- RHEL-compatible systems with `apt`, `dnf`, or `yum`
 
-### Install
+### Commands
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/install.sh | bash
+ai
+ai-menu
 ```
 
-### Features
+`ai-menu`:
+1. Change API key
+2. Check status
+3. Exit
 
-- VLEEE API
-- GPT-5.6 Luna
-- VPS AI terminal
-- API connection test
-- API key management
-- Model management
-- Automatic `figlet` installation
-- Automatic backup
-
-### Telegram
-
-**@ejaywattapak**
-
-https://t.me/ejaywattapak
+Telegram: [@ejaywattapak](https://t.me/ejaywattapak)
