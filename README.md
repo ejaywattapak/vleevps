@@ -1,25 +1,18 @@
 # VLEE AI Agent
 
-```text
-VLEE AI AGENT BY EJAYWATTAPAK
-```
+**VLEE AI Agent by EJAYWATTAPAK** — autonomous Linux VPS AI agent powered by **GPT-5.6 Luna** through VLEEE API.
 
-Linux VPS autonomous AI agent using **GPT-5.6 Luna** through VLEEE API.
-
-## Supported OS
-
-- Ubuntu 22.04+
-- Ubuntu 24.04+
-- Debian 12+
-- Debian 13+
+It can inspect your VPS, read files/scripts, diagnose errors, run shell commands, repair configurations, install/configure software, and verify changes. The agent is designed to **do the work on the VPS**, not just tell you what commands to run.
 
 ## Installation
 
+One latest installer for supported Ubuntu/Debian systems:
+
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh)
+curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
 ```
 
-Installer will ask for your **VLEEE API key**, install dependencies, configure the agent, and run a real AI function test.
+The installer asks for your VLEEE API key and performs a real GPT-5.6 Luna function test before finishing.
 
 ## Commands
 
@@ -29,7 +22,13 @@ Installer will ask for your **VLEEE API key**, install dependencies, configure t
 ai
 ```
 
-The agent can inspect the VPS, execute commands, diagnose problems, apply fixes, and verify the result.
+Example:
+
+```text
+AI > check spec vps aku
+
+Thinking...
+```
 
 ### Menu
 
@@ -45,22 +44,51 @@ Menu:
 3) Exit
 ```
 
+`Check status` performs a **real GPT-5.6 Luna chat request**. It does not report fake/assumed status.
+
 ## Update
 
 ### Ubuntu
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh)
+curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
 ```
 
 ### Debian
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh)
+curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
 ```
 
-The same installer supports both Ubuntu and Debian.
+The same latest installer is used for both Ubuntu and Debian.
 
-## Telegram
+## Requirements
 
-Chat directly: https://t.me/ejaywattapak
+- Ubuntu or Debian
+- `root` access
+- Internet connection
+- VLEEE API key
+
+The installer handles required dependencies and creates:
+
+```text
+/usr/local/bin/ai
+/usr/local/bin/ai-menu
+/root/.vlee_ai/api_key
+```
+
+## API Key
+
+If you need a VLEEE API key, contact:
+
+**Telegram:** [@ejaywattapak](https://t.me/ejaywattapak)
+
+Please keep your API key private and do not publish it in GitHub repositories, screenshots, or public logs.
+
+## Notes
+
+GPT-5.6 Luna availability depends on VLEEE provider capacity. If VLEEE returns `402`, `503`, rate-limit, or provider-capacity errors, the agent will show the actual API error instead of claiming that the AI is working.
+
+---
+
+**VLEE AI AGENT BY EJAYWATTAPAK**
