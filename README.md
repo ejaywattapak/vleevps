@@ -1,45 +1,37 @@
 # VLEE AI Agent
 
 ```text
-██╗   ██╗██╗     ███████╗███████╗
-██║   ██║██║     ██╔════╝██╔════╝
-██║   ██║██║     █████╗  █████╗
-╚██╗ ██╔╝██║     ██╔══╝  ██╔══╝
- ╚████╔╝ ███████╗███████╗███████╗
-  ╚═══╝  ╚══════╝╚══════╝╚══════╝
-
 VLEE AI AGENT BY EJAYWATTAPAK
 ```
 
-Autonomous VPS AI agent powered by **GPT-5.6 Luna** through VLEEE.
+Linux VPS autonomous AI agent using **GPT-5.6 Luna** through VLEEE API.
 
 ## Supported OS
 
-- Ubuntu
-- Debian
-- Rocky Linux
-- AlmaLinux
-- RHEL-compatible systems
+- Ubuntu 22.04+
+- Ubuntu 24.04+
+- Debian 12+
+- Debian 13+
 
 ## Installation
 
 ```bash
-apt update && apt install -y curl figlet && curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh)
 ```
 
-## Update
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
-```
+Installer will ask for your **VLEEE API key**, install dependencies, configure the agent, and run a real AI function test.
 
 ## Commands
+
+### Start AI
 
 ```bash
 ai
 ```
 
-Start the autonomous AI agent.
+The agent can inspect the VPS, execute commands, diagnose problems, apply fixes, and verify the result.
+
+### Menu
 
 ```bash
 ai-menu
@@ -53,13 +45,22 @@ Menu:
 3) Exit
 ```
 
-## Model
+## Update
 
-```text
-GPT-5.6 Luna
-gpt-5.6-luna
+### Ubuntu
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh)
 ```
+
+### Debian
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh)
+```
+
+The same installer supports both Ubuntu and Debian.
 
 ## Telegram
 
-https://t.me/ejaywattapak
+Chat directly: https://t.me/ejaywattapak
