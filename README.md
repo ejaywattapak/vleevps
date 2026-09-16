@@ -11,7 +11,7 @@
 VLEE AI AGENT BY EJAYWATTAPAK
 ```
 
-VPS autonomous AI agent powered by **GPT-5.6 Luna** through VLEEE.
+Autonomous VPS AI agent powered by **GPT-5.6 Luna** through VLEEE.
 
 ## Supported OS
 
@@ -23,35 +23,23 @@ VPS autonomous AI agent powered by **GPT-5.6 Luna** through VLEEE.
 
 ## Installation
 
-**Install VLEE AI Agent:**
-
-https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh
-
 ```bash
 apt update && apt install -y curl figlet && curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
 ```
 
 ## Update
 
-**Update VLEE AI Agent:**
-
-https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
 ```
 
-The installer automatically backs up the existing agent before updating.
-
 ## Commands
-
-### Start AI
 
 ```bash
 ai
 ```
 
-### AI Menu
+Start the autonomous AI agent.
 
 ```bash
 ai-menu
