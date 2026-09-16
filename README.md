@@ -4,6 +4,20 @@
 
 It can inspect your VPS, read files/scripts, diagnose errors, run shell commands, repair configurations, install/configure software, and verify changes. The agent is designed to **do the work on the VPS**, not just tell you what commands to run.
 
+## Update
+
+### Ubuntu
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
+```
+
+### Debian
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
+```
+
 ## Installation
 
 One latest installer for supported Ubuntu/Debian systems:
@@ -45,22 +59,6 @@ Menu:
 ```
 
 `Check status` performs a **real GPT-5.6 Luna chat request**. It does not report fake/assumed status.
-
-## Update
-
-### Ubuntu
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
-```
-
-### Debian
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ejaywattapak/vleevps/main/installer.sh | bash
-```
-
-The same latest installer is used for both Ubuntu and Debian.
 
 ## Requirements
 
