@@ -7,6 +7,9 @@ KEY_DIR="/root/.vlee_ai"
 KEY_FILE="$KEY_DIR/api_key"
 AI="/usr/local/bin/ai"
 MENU="/usr/local/bin/ai-menu"
+BACKUP_DIR="$KEY_DIR/.installer-backup-$(date +%Y%m%d-%H%M%S)"
+CREATED_BACKUP=0
+COMMITTED=0
 
 YELLOW='\033[1;33m'
 GREEN='\033[1;32m'
@@ -16,9 +19,9 @@ RESET='\033[0m'
 
 banner() {
   clear || true
-  printf '%b\n' "${CYAN}"
+  printf '%b\n' "$CYAN"
   if command -v figlet >/dev/null 2>&1; then
-    figlet -f standard "VLEE AI"
+    figlet -f standard "VLEE AI" 2>/dev/null || true
   else
     printf '%s\n' \
       '██╗   ██╗██╗     ███████╗███████╗' \
@@ -35,16 +38,64 @@ step(){ printf '%b◆ [%s/6] %s%b\n' "$CYAN" "$1" "$2" "$RESET"; }
 ok(){ printf '%b✔ %s%b\n' "$GREEN" "$1" "$RESET"; }
 fail(){ printf '%b✖ %s%b\n' "$RED" "$1" "$RESET"; }
 
+rollback() {
+  [[ "$COMMITTED" == "1" ]] && return 0
+  printf '%bRolling back installer changes...%b\n' "$YELLOW" "$RESET"
+
+  if [[ "$CREATED_BACKUP" == "1" && -d "$BACKUP_DIR" ]]; then
+    if [[ -f "$BACKUP_DIR/ai" ]]; then
+      cp -af "$BACKUP_DIR/ai" "$AI"
+    else
+      rm -f "$AI"
+    fi
+
+    if [[ -f "$BACKUP_DIR/ai-menu" ]]; then
+      cp -af "$BACKUP_DIR/ai-menu" "$MENU"
+    else
+      rm -f "$MENU"
+    fi
+
+    if [[ -f "$BACKUP_DIR/api_key" ]]; then
+      cp -af "$BACKUP_DIR/api_key" "$KEY_FILE"
+      chmod 600 "$KEY_FILE"
+    else
+      rm -f "$KEY_FILE"
+    fi
+  else
+    rm -f "$AI" "$MENU"
+    rm -f "$KEY_FILE"
+  fi
+
+  rm -f /usr/bin/ai /bin/ai /usr/bin/ai-menu /bin/ai-menu
+  if [[ -f "$BACKUP_DIR/usr-bin-ai" ]]; then
+    cp -af "$BACKUP_DIR/usr-bin-ai" /usr/bin/ai
+  fi
+  if [[ -f "$BACKUP_DIR/bin-ai" ]]; then
+    cp -af "$BACKUP_DIR/bin-ai" /bin/ai
+  fi
+  if [[ -f "$BACKUP_DIR/usr-bin-ai-menu" ]]; then
+    cp -af "$BACKUP_DIR/usr-bin-ai-menu" /usr/bin/ai-menu
+  fi
+  if [[ -f "$BACKUP_DIR/bin-ai-menu" ]]; then
+    cp -af "$BACKUP_DIR/bin-ai-menu" /bin/ai-menu
+  fi
+
+  printf '%b✔ Rollback completed.%b\n' "$GREEN" "$RESET"
+}
+
+trap 'rc=$?; if [[ $rc -ne 0 && "$COMMITTED" != "1" ]]; then rollback; fi; exit $rc' EXIT
+
 banner
+
+if [[ $EUID -ne 0 ]]; then
+  fail "Run this installer as root."
+  exit 1
+fi
 
 step 1 "Check dependencies"
 if ! command -v python3 >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
   fail "python3 and curl are required."
   exit 1
-fi
-if ! command -v figlet >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
-  apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq figlet >/dev/null
 fi
 ok "Dependencies OK"
 
@@ -52,27 +103,29 @@ step 2 "API key"
 mkdir -p "$KEY_DIR"
 chmod 700 "$KEY_DIR"
 
-printf 'Masukkan VLEEE API key.\n'
-printf '%b➜ VLEEE API key: %b' "$YELLOW" "$RESET"
-IFS= read -r API_KEY </dev/tty
+# Snapshot everything that may be touched before changing anything.
+mkdir -p "$BACKUP_DIR"
+CREATED_BACKUP=1
+for f in "$AI" "$MENU" "$KEY_FILE" /usr/bin/ai /bin/ai /usr/bin/ai-menu /bin/ai-menu; do
+  if [[ -e "$f" || -L "$f" ]]; then
+    case "$f" in
+      "$AI") cp -a "$f" "$BACKUP_DIR/ai" ;;
+      "$MENU") cp -a "$f" "$BACKUP_DIR/ai-menu" ;;
+      "$KEY_FILE") cp -a "$f" "$BACKUP_DIR/api_key" ;;
+      /usr/bin/ai) cp -a "$f" "$BACKUP_DIR/usr-bin-ai" ;;
+      /bin/ai) cp -a "$f" "$BACKUP_DIR/bin-ai" ;;
+      /usr/bin/ai-menu) cp -a "$f" "$BACKUP_DIR/usr-bin-ai-menu" ;;
+      /bin/ai-menu) cp -a "$f" "$BACKUP_DIR/bin-ai-menu" ;;
+    esac
+  fi
+done
 
-if [[ -z "$API_KEY" ]]; then
-  fail "API key kosong."
-  exit 1
-fi
-
-# Do NOT save the key until the real VLEE API has accepted the request.
-TMP_KEY="$(mktemp)"
-trap 'rm -f "$TMP_KEY"' EXIT
-printf '%s\n' "$API_KEY" > "$TMP_KEY"
-chmod 600 "$TMP_KEY"
-
-printf '%bVerifying API key with VLEEE...%b\n' "$YELLOW" "$RESET"
-
-VERIFY="$(python3 - "$TMP_KEY" <<'PY'
+verify_key() {
+  local k="$1"
+  python3 - "$k" <<'PY'
 import json, sys, urllib.error, urllib.request
 
-key = open(sys.argv[1], encoding="utf-8").read().strip()
+key = sys.argv[1]
 body = json.dumps({
     "model": "cx/gpt-5.6-luna",
     "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
@@ -95,45 +148,71 @@ req = urllib.request.Request(
 try:
     with urllib.request.urlopen(req, timeout=30) as r:
         data = json.loads(r.read().decode())
-    text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    if text:
+    if data.get("choices"):
         print("VALID")
     else:
         print("INVALID_RESPONSE")
 except urllib.error.HTTPError as e:
-    body = e.read().decode(errors="replace")
     print("HTTP " + str(e.code))
-    print(body)
+    print(e.read().decode(errors="replace"))
 except Exception as e:
     print("ERROR " + str(e))
 PY
-)"
+}
 
-if [[ "$VERIFY" == "VALID" ]]; then
-  printf '%s\n' "$API_KEY" > "$KEY_FILE"
-  chmod 600 "$KEY_FILE"
-  ok "API key verified and saved"
-elif [[ "$VERIFY" == HTTP\ 402* || "$VERIFY" == HTTP\ 503* ]]; then
-  # VLEE has authenticated the request but currently cannot route the model.
-  # This is NOT treated as a fake successful chat test.
-  printf '%s\n' "$API_KEY" > "$KEY_FILE"
-  chmod 600 "$KEY_FILE"
-  printf '%b⚠ API key was accepted by VLEEE, but GPT-5.6 Luna is currently unavailable.%b\n' "$YELLOW" "$RESET"
-  printf '%s\n' "$VERIFY"
-  printf '%bKey saved. The final real AI test below will show the actual service error.%b\n' "$YELLOW" "$RESET"
-else
-  fail "API key verification failed. Key was NOT saved."
-  printf '%s\n' "$VERIFY"
+API_KEY=""
+KEY_OK=0
+
+for attempt in 1 2 3; do
+  printf '\n%bAttempt %s/3%b\n' "$YELLOW" "$attempt" "$RESET"
+  printf '%b➜ VLEEE API key: %b' "$YELLOW" "$RESET"
+  IFS= read -r API_KEY </dev/tty
+
+  if [[ -z "$API_KEY" ]]; then
+    fail "API key kosong."
+    continue
+  fi
+
+  printf '%bVerifying API key with VLEEE...%b\n' "$YELLOW" "$RESET"
+  VERIFY="$(verify_key "$API_KEY")"
+
+  case "$VERIFY" in
+    VALID)
+      KEY_OK=1
+      ok "API key verified"
+      break
+      ;;
+    HTTP\ 402*|HTTP\ 503*)
+      # Authentication reached VLEE, but the requested model currently
+      # has no routable provider / capacity. Do not call this an invalid key.
+      KEY_OK=1
+      printf '%b⚠ Key reached VLEE, but GPT-5.6 Luna is currently unavailable.%b\n' "$YELLOW" "$RESET"
+      printf '%s\n' "$VERIFY"
+      break
+      ;;
+    *)
+      fail "Invalid API key / verification failed."
+      printf '%s\n' "$VERIFY"
+      if [[ "$attempt" -lt 3 ]]; then
+        printf '%bPlease try again.%b\n' "$YELLOW" "$RESET"
+      fi
+      ;;
+  esac
+done
+
+if [[ "$KEY_OK" != "1" ]]; then
+  fail "3 API key attempts failed."
+  rollback
   exit 1
 fi
 
+# Only now replace the stored key.
+printf '%s\n' "$API_KEY" > "$KEY_FILE"
+chmod 600 "$KEY_FILE"
+ok "API key saved"
+
 step 3 "Backup existing agent"
-BACKUP="$KEY_DIR/backup-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP"
-for f in "$AI" "$MENU"; do
-  [[ -f "$f" ]] && cp -a "$f" "$BACKUP/"
-done
-ok "Existing files backed up"
+ok "Existing files backed up to $BACKUP_DIR"
 
 step 4 "Installing autonomous agent"
 cat > "$AI" <<'PY'
@@ -299,19 +378,57 @@ RED='\033[1;31m'
 CYAN='\033[1;36m'
 RESET='\033[0m'
 
+verify() {
+python3 <<'PY'
+import json,urllib.error,urllib.request
+try:
+    key=open("/root/.vlee_ai/api_key").read().strip()
+except Exception:
+    print("\033[1;31m✖ API key not found\033[0m")
+    raise SystemExit
+
+body=json.dumps({
+ "model":"cx/gpt-5.6-luna",
+ "messages":[{"role":"user","content":"Reply with exactly: OK"}],
+ "max_tokens":8,"temperature":0
+}).encode()
+
+req=urllib.request.Request(
+ "https://api.vleee.net/v1/chat/completions",
+ data=body, method="POST",
+ headers={"Authorization":"Bearer "+key,
+          "Content-Type":"application/json",
+          "Accept":"application/json",
+          "User-Agent":"VLEE-AI-Agent/1.0"})
+try:
+    with urllib.request.urlopen(req,timeout=30) as r:
+        d=json.loads(r.read().decode())
+    if d.get("choices"):
+        print("\033[1;32m✔ GPT-5.6 Luna actual chat test OK\033[0m")
+    else:
+        print("\033[1;31m✖ Empty response\033[0m")
+except urllib.error.HTTPError as e:
+    print(f"\033[1;31m✖ AI function FAILED — HTTP {e.code}\033[0m")
+    print(e.read().decode(errors="replace"))
+except Exception as e:
+    print(f"\033[1;31m✖ AI function FAILED: {e}\033[0m")
+PY
+}
+
 change_key() {
-  printf "${YELLOW}New VLEEE API key: ${RESET}"
-  IFS= read -r k </dev/tty
-  [[ -z "$k" ]] && { printf "${RED}✖ Key kosong.${RESET}\n"; return; }
+  local k result tmp
+  for attempt in 1 2 3; do
+    printf "\n${YELLOW}New VLEEE API key [$attempt/3]: ${RESET}"
+    IFS= read -r k </dev/tty
+    [[ -z "$k" ]] && { printf "${RED}✖ Key kosong.${RESET}\n"; continue; }
 
-  printf '%bVerifying new API key...%b\n' "$YELLOW" "$RESET"
-  tmp="$(mktemp)"
-  printf '%s\n' "$k" > "$tmp"
-  chmod 600 "$tmp"
+    tmp="$(mktemp)"
+    chmod 600 "$tmp"
+    printf '%s\n' "$k" > "$tmp"
 
-  result="$(python3 - "$tmp" <<'PY'
+    result="$(python3 - "$k" <<'PY'
 import json,sys,urllib.error,urllib.request
-key=open(sys.argv[1]).read().strip()
+key=sys.argv[1]
 body=json.dumps({
  "model":"cx/gpt-5.6-luna",
  "messages":[{"role":"user","content":"Reply with exactly: OK"}],
@@ -319,9 +436,11 @@ body=json.dumps({
 }).encode()
 req=urllib.request.Request(
  "https://api.vleee.net/v1/chat/completions",
- data=body, method="POST",
- headers={"Authorization":"Bearer "+key,"Content-Type":"application/json",
-          "Accept":"application/json","User-Agent":"VLEE-AI-Agent/1.0"})
+ data=body,method="POST",
+ headers={"Authorization":"Bearer "+key,
+          "Content-Type":"application/json",
+          "Accept":"application/json",
+          "User-Agent":"VLEE-AI-Agent/1.0"})
 try:
  with urllib.request.urlopen(req,timeout=30) as r:
   d=json.loads(r.read().decode())
@@ -333,52 +452,24 @@ except Exception as e:
  print("ERROR "+str(e))
 PY
 )"
-  rm -f "$tmp"
+    rm -f "$tmp"
 
-  if [[ "$result" == "VALID" || "$result" == HTTP\ 402* || "$result" == HTTP\ 503* ]]; then
-    printf '%s\n' "$k" > "$KEY_FILE"
-    chmod 600 "$KEY_FILE"
-    printf "${GREEN}✔ API key accepted and saved${RESET}\n"
-    [[ "$result" != "VALID" ]] && printf "${YELLOW}⚠ GPT-5.6 Luna is currently unavailable; actual error shown below.${RESET}\n%s\n" "$result"
-  else
-    printf "${RED}✖ API key rejected. It was NOT saved.${RESET}\n%s\n" "$result"
-  fi
-}
+    case "$result" in
+      VALID|HTTP\ 402*|HTTP\ 503*)
+        printf '%s\n' "$k" > "$KEY_FILE"
+        chmod 600 "$KEY_FILE"
+        printf "${GREEN}✔ API key accepted and saved.${RESET}\n"
+        [[ "$result" != "VALID" ]] && printf "${YELLOW}⚠ Model/provider unavailable right now.${RESET}\n%s\n" "$result"
+        return 0
+        ;;
+      *)
+        printf "${RED}✖ API key verification failed.${RESET}\n%s\n" "$result"
+        ;;
+    esac
+  done
 
-status() {
-  python3 - <<'PY'
-import json,urllib.error,urllib.request
-p="/root/.vlee_ai/api_key"
-try:
-    key=open(p).read().strip()
-except Exception:
-    print("\033[1;31m✖ API key not found\033[0m")
-    raise SystemExit
-
-body=json.dumps({
- "model":"cx/gpt-5.6-luna",
- "messages":[{"role":"user","content":"Reply with exactly: OK"}],
- "max_tokens":8,"temperature":0
-}).encode()
-req=urllib.request.Request(
- "https://api.vleee.net/v1/chat/completions",
- data=body,method="POST",
- headers={"Authorization":"Bearer "+key,"Content-Type":"application/json",
-          "Accept":"application/json","User-Agent":"VLEE-AI-Agent/1.0"})
-try:
-    with urllib.request.urlopen(req,timeout=30) as r:
-        d=json.loads(r.read().decode())
-    text=d.get("choices",[{}])[0].get("message",{}).get("content","").strip()
-    if text:
-        print("\033[1;32m✔ GPT-5.6 Luna actual chat test OK\033[0m")
-    else:
-        print("\033[1;31m✖ Chat returned empty response\033[0m")
-except urllib.error.HTTPError as e:
-    print(f"\033[1;31m✖ AI function FAILED — HTTP {e.code}\033[0m")
-    print(e.read().decode(errors="replace"))
-except Exception as e:
-    print(f"\033[1;31m✖ AI function FAILED: {e}\033[0m")
-PY
+  printf "${RED}✖ 3 attempts failed. Existing key was kept.${RESET}\n"
+  return 1
 }
 
 while :; do
@@ -389,21 +480,34 @@ while :; do
   echo "  3) Exit"
   printf "\n  Select [1-3]: "
   IFS= read -r c </dev/tty
+
   case "$c" in
     1) change_key; read -r -p "  Press Enter..." _ </dev/tty ;;
-    2) status; read -r -p "  Press Enter..." _ </dev/tty ;;
+    2) verify; read -r -p "  Press Enter..." _ </dev/tty ;;
     3) exit 0 ;;
   esac
 done
 BASH
 chmod 755 "$MENU"
-
-ln -sf "$AI" /usr/local/bin/ai
-ln -sf "$MENU" /usr/local/bin/ai-menu
 ok "Commands installed: ai, ai-menu"
 
+# IMPORTANT:
+# Do not create /usr/local/bin/ai -> /usr/local/bin/ai.
+# /usr/local/bin is already in PATH on normal Debian/Ubuntu root shells.
+# Only create /usr/bin and /bin links when they do not already resolve to AI.
+for target in /usr/bin/ai /bin/ai; do
+  if [[ ! -e "$target" && ! -L "$target" ]]; then
+    ln -s "$AI" "$target"
+  fi
+done
+for target in /usr/bin/ai-menu /bin/ai-menu; do
+  if [[ ! -e "$target" && ! -L "$target" ]]; then
+    ln -s "$MENU" "$target"
+  fi
+done
+
 step 6 "Real AI function test"
-printf '%bTesting actual %s chat completion...%b\n' "$YELLOW" "$RESET"
+printf '%bTesting actual GPT-5.6 Luna chat completion...%b\n' "$YELLOW" "$RESET"
 
 TEST="$(python3 - <<'PY'
 import json,urllib.error,urllib.request
@@ -416,8 +520,10 @@ body=json.dumps({
 req=urllib.request.Request(
  "https://api.vleee.net/v1/chat/completions",
  data=body,method="POST",
- headers={"Authorization":"Bearer "+key,"Content-Type":"application/json",
-          "Accept":"application/json","User-Agent":"VLEE-AI-Agent/1.0"})
+ headers={"Authorization":"Bearer "+key,
+          "Content-Type":"application/json",
+          "Accept":"application/json",
+          "User-Agent":"VLEE-AI-Agent/1.0"})
 try:
     with urllib.request.urlopen(req,timeout=30) as r:
         d=json.loads(r.read().decode())
@@ -439,6 +545,7 @@ else
   echo "Run: ai-menu → 2) Check status"
 fi
 
+COMMITTED=1
 echo
 printf '%bInstallation complete.%b\n' "$GREEN" "$RESET"
 echo "Use: ai"
